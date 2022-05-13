@@ -31,9 +31,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-// TODO register reload listener
 public class RubieConnectionRenderer implements ResourceManagerReloadListener {
-    private static final LoadingCache<SegmentKey, RenderedSegment> SEGMENT_CACHE = CacheBuilder.newBuilder()
+    private static final LoadingCache<SegmentsKey, List<RenderedSegment>> SEGMENT_CACHE = CacheBuilder.newBuilder()
             .expireAfterAccess(120, TimeUnit.SECONDS)
             .build(CacheLoader.from(RubieConnectionRenderer::renderSegmentForCache));
     private static final ResettableLazy<TextureAtlasSprite> WIRE_TEXTURE = new ResettableLazy<>(
@@ -57,8 +56,9 @@ public class RubieConnectionRenderer implements ResourceManagerReloadListener {
     ) {
         GlobalWireNetwork globalNet = GlobalWireNetwork.getNetwork(Minecraft.getInstance().level);
         List<WireCollisionData.ConnectionSegments> connectionParts = globalNet.getCollisionData().getWiresIn(section);
-        if (connectionParts == null || connectionParts.isEmpty())
+        if (connectionParts == null || connectionParts.isEmpty()) {
             return;
+        }
         RenderType renderType = RenderType.solid();
         ChunkModelBuilder builder = buffers.get(renderType);
         int originX = section.minBlockX();
@@ -67,32 +67,32 @@ public class RubieConnectionRenderer implements ResourceManagerReloadListener {
         for (WireCollisionData.ConnectionSegments connection : connectionParts) {
             ConnectionPoint connectionOrigin = connection.connection().getEndA();
             renderSegments(
-                    builder, connection,
+                    builder, connection, region,
                     connectionOrigin.getX() - originX,
                     connectionOrigin.getY() - originY,
-                    connectionOrigin.getZ() - originZ,
-                    region
+                    connectionOrigin.getZ() - originZ
             );
         }
     }
 
     public static void renderSegments(
             ChunkModelBuilder out, WireCollisionData.ConnectionSegments toRender,
-            int offX, int offY, int offZ,
-            BlockAndTintGetter level
+            BlockAndTintGetter level, int offX, int offY, int offZ
     ) {
         Connection connection = toRender.connection();
         int color = connection.type.getColour(connection);
         double radius = connection.type.getRenderDiameter() / 2;
-        int lastLight = 0;
-        // TODO ensure capacity on out
         var vertices = out.getVertexSink();
-        for (int startPoint = toRender.firstPointToRender(); startPoint < toRender.lastPointToRender(); ++startPoint) {
-            RenderedSegment renderedSegment = SEGMENT_CACHE.getUnchecked(
-                    new SegmentKey(radius, color, connection.getCatenaryData(), startPoint)
-            );
-            if (startPoint == toRender.firstPointToRender())
+        List<RenderedSegment> segments = SEGMENT_CACHE.getUnchecked(new SegmentsKey(
+                radius, color, connection.getCatenaryData(), toRender.firstPointToRender(), toRender.lastPointToRender()
+        ));
+        vertices.ensureCapacity(2 * 4 * segments.size());
+        int lastLight = 0;
+        for (int startPoint = 0; startPoint < segments.size(); ++startPoint) {
+            var renderedSegment = segments.get(startPoint);
+            if (startPoint == 0) {
                 lastLight = getLight(connection, renderedSegment.offsetStart, level);
+            }
             int nextLight = getLight(connection, renderedSegment.offsetEnd, level);
             renderedSegment.render(lastLight, nextLight, offX, offY, offZ, out);
             lastLight = nextLight;
@@ -100,39 +100,47 @@ public class RubieConnectionRenderer implements ResourceManagerReloadListener {
         vertices.flush();
     }
 
-    private static RenderedSegment renderSegmentForCache(SegmentKey key) {
+    private static List<RenderedSegment> renderSegmentForCache(SegmentsKey key) {
+        List<RenderedSegment> segments = new ArrayList<>(key.endIndex() - key.beginIndex());
+        for (int i = key.beginIndex(); i < key.endIndex(); ++i) {
+            segments.add(renderSegmentForCache(key, i));
+        }
+        return segments;
+    }
+
+    private static RenderedSegment renderSegmentForCache(SegmentsKey key, int startIndex) {
         Connection.CatenaryData catenaryData = key.catenaryShape();
-        List<Quad> quads = new ArrayList<>(2);
-        Vec3 start = key.catenaryShape().getRenderPoint(key.startIndex());
-        Vec3 end = key.catenaryShape().getRenderPoint(key.startIndex() + 1);
+        Vec3 start = key.catenaryShape().getRenderPoint(startIndex);
+        Vec3 end = key.catenaryShape().getRenderPoint(startIndex + 1);
         Vec3 horNormal;
-        if (key.catenaryShape().isVertical())
+        if (key.catenaryShape().isVertical()) {
             horNormal = new Vec3(1, 0, 0);
-        else
+        } else {
             horNormal = new Vec3(-catenaryData.delta().z, 0, catenaryData.delta().x).normalize();
+        }
         Vec3 verticalNormal = start.subtract(end).cross(horNormal).normalize();
         Vec3 horRadius = horNormal.scale(key.radius());
         Vec3 verticalRadius = verticalNormal.scale(-key.radius());
-
-        renderQuad(quads, start, end, horRadius, key.color());
-        renderQuad(quads, start, end, verticalRadius, key.color());
-        return new RenderedSegment(quads, new Vec3i(start.x, start.y, start.z), new Vec3i(end.x, end.y, end.z));
+        return new RenderedSegment(
+                renderQuad(start, end, horRadius, key.color()),
+                renderQuad(start, end, verticalRadius, key.color()),
+                new Vec3i(start.x, start.y, start.z),
+                new Vec3i(end.x, end.y, end.z)
+        );
     }
 
     private static int getLight(Connection connection, Vec3i point, BlockAndTintGetter level) {
         return LevelRenderer.getLightColor(level, connection.getEndA().position().offset(point));
     }
 
-    private static void renderQuad(
-            List<Quad> out, Vec3 start, Vec3 end, Vec3 radius, int color
-    ) {
+    private static Quad renderQuad(Vec3 start, Vec3 end, Vec3 radius, int color) {
         TextureAtlasSprite texture = WIRE_TEXTURE.get();
-        out.add(new Quad(
+        return new Quad(
                 vertex(start.add(radius), texture.getU0(), texture.getV0(), color, true),
                 vertex(end.add(radius), texture.getU1(), texture.getV0(), color, false),
                 vertex(end.subtract(radius), texture.getU1(), texture.getV1(), color, false),
                 vertex(start.subtract(radius), texture.getU0(), texture.getV1(), color, true)
-        ));
+        );
     }
 
     private static Vertex vertex(Vec3 point, double u, double v, int color, boolean lightForStart) {
@@ -141,7 +149,9 @@ public class RubieConnectionRenderer implements ResourceManagerReloadListener {
         );
     }
 
-    private record SegmentKey(double radius, int color, Connection.CatenaryData catenaryShape, int startIndex) {
+    private record SegmentsKey(
+            double radius, int color, Connection.CatenaryData catenaryShape, int beginIndex, int endIndex
+    ) {
     }
 
     private record Vertex(
@@ -176,13 +186,12 @@ public class RubieConnectionRenderer implements ResourceManagerReloadListener {
         }
     }
 
-    private record RenderedSegment(List<Quad> quads, Vec3i offsetStart, Vec3i offsetEnd) {
+    private record RenderedSegment(Quad quadA, Quad quadB, Vec3i offsetStart, Vec3i offsetEnd) {
         public void render(
                 int lightStart, int lightEnd, int offX, int offY, int offZ, ChunkModelBuilder out
         ) {
-            for (Quad quad : quads) {
-                quad.write(out, offX, offY, offZ, lightStart, lightEnd);
-            }
+            quadA.write(out, offX, offY, offZ, lightStart, lightEnd);
+            quadB.write(out, offX, offY, offZ, lightStart, lightEnd);
         }
     }
 }

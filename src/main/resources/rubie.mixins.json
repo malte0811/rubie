@@ -7,9 +7,8 @@
   },
   "minVersion": "0.8",
   "client": [
-    "ChunkRenderRebuildTaskMixin"
-  ],
-  "mixins": [
+    "ChunkRenderRebuildTaskMixin",
     "RenderSectionManagerMixin"
-  ]
+  ],
+  "refmap": "rubie.refmap.json"
 }
