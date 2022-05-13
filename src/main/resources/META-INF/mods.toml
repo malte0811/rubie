@@ -1,0 +1,22 @@
+modLoader = "javafml"
+loaderVersion = "[40,)"
+license = "MIT"
+[[mods]]
+modId = "rubie"
+version = "${file.jarVersion}"
+displayName = "RubIE"
+description = '''
+Compat hacks for IE and Rubidium (and hopefully other sodium forks as well)
+'''
+[[dependencies.rubie]] #optional
+modId = "forge"
+mandatory = true
+versionRange = "[40,)"
+[[dependencies.rubie]]
+modId = "minecraft"
+mandatory = true
+versionRange = "[1.18.2,1.19)"
+[[dependencies.rubie]]
+modId = "immersiveengineering"
+mandatory = true
+versionRange = "[1.18.2,)"
