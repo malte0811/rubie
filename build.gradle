@@ -15,7 +15,6 @@ plugins {
     id 'eclipse'
     id 'maven-publish'
 }
-// TODO move (some of) these to plugins block?
 apply plugin: 'net.minecraftforge.gradle'
 apply plugin: 'org.spongepowered.mixin'
 apply plugin: 'org.parchmentmc.librarian.forgegradle'
@@ -55,18 +54,12 @@ repositories {
             includeGroup "curse.maven"
         }
     }
-    flatDir {
-        dirs 'flatdir'
-    }
 }
 
 dependencies {
     minecraft "net.minecraftforge:forge:${version_minecraft}-${version_forge}"
     implementation fg.deobf("blusunrize.immersiveengineering:ImmersiveEngineering:${version_minecraft}-${version_ie}")
     implementation fg.deobf("curse.maven:rubidium-574856:3749094")
-
-    runtimeOnly fg.deobf("curse.maven:lazydfu-460819:3544496")
-    runtimeOnly fg.deobf("curse.maven:ferritecore-429235:3672146")
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
 }
 
@@ -81,9 +74,7 @@ mixin {
     config "${modid}.mixins.json"
 }
 
-// TODO set up custom.gradle and move this to there
-configurations.all {
-    resolutionStrategy {
-        force 'cpw.mods:securejarhandler:1.99.99'
-    }
+def customGradle = rootProject.file('custom.gradle');
+if (customGradle.exists()) {
+    apply from: customGradle;
 }
