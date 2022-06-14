@@ -14,6 +14,7 @@ import me.jellysquid.mods.sodium.client.model.quad.properties.ModelQuadWinding;
 import me.jellysquid.mods.sodium.client.render.chunk.compile.ChunkBuildBuffers;
 import me.jellysquid.mods.sodium.client.render.chunk.compile.buffers.ChunkModelBuilder;
 import me.jellysquid.mods.sodium.client.render.chunk.format.ModelVertexSink;
+import me.jellysquid.mods.sodium.client.util.color.ColorARGB;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.RenderType;
@@ -80,11 +81,13 @@ public class RubieConnectionRenderer implements ResourceManagerReloadListener {
             BlockAndTintGetter level, int offX, int offY, int offZ
     ) {
         Connection connection = toRender.connection();
-        int color = connection.type.getColour(connection);
+        int colorRGB = connection.type.getColour(connection);
+        int colorBGR = ColorARGB.toABGR(colorRGB);
         double radius = connection.type.getRenderDiameter() / 2;
         var vertices = out.getVertexSink();
         List<RenderedSegment> segments = SEGMENT_CACHE.getUnchecked(new SegmentsKey(
-                radius, color, connection.getCatenaryData(), toRender.firstPointToRender(), toRender.lastPointToRender()
+                radius, colorBGR, connection.getCatenaryData(),
+                toRender.firstPointToRender(), toRender.lastPointToRender()
         ));
         vertices.ensureCapacity(2 * 4 * segments.size());
         int lastLight = 0;
