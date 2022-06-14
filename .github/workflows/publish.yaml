@@ -1,0 +1,33 @@
+name: Build and create GH release
+
+on:
+  push:
+permissions:
+  contents: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            build
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+      - name: Set up JDK 17
+        uses: actions/setup-java@v1
+        with:
+          java-version: 17
+      - name: Build Rubie
+        run: ./gradlew build
+      - name: Upload build
+        uses: softprops/action-gh-release@v1
+        with:
+          files: build/libs/rubie-${{ github.run_number }}.jar
+          name: Build-${{ github.run_number }}
+          tag_name: build-${{ github.run_number }}
+          token: ${{ secrets.GITHUB_TOKEN }}

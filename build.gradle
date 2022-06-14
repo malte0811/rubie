@@ -20,9 +20,13 @@ apply plugin: 'org.spongepowered.mixin'
 apply plugin: 'org.parchmentmc.librarian.forgegradle'
 
 
-version = '0.0'
+version = makeVersion()
 group = "malte0811.${modid}"
 archivesBaseName = modid
+
+String makeVersion() {
+    return System.getenv("GITHUB_ACTIONS") != null ? System.getenv("GITHUB_RUN_NUMBER") : "CUSTOM"
+}
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(17)
 
